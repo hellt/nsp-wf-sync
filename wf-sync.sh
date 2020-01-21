@@ -8,14 +8,17 @@
 # IP address or the domain name of the NSP server (without http(s) schema)
 NSP_URL=$1
 
+# IP address or the domain name of the WFM server
+WFM_URL=$2
+
 # path to the workflow file
-WF_FILE=$2
+WF_FILE=$3
 
 # ID of the workflow; you can get the workflows and the corresponding IDs by calling `bash wf_sync.sh nsp_ip list_workflows`
-WF_ID=$3
+WF_ID=$4
 
 # http proxy which will be used by curl if set
-HTTP_PROXY=$4
+HTTP_PROXY=$5
 
 function check_args() {
     if [ -z "$NSP_URL" ]; then
@@ -24,9 +27,16 @@ function check_args() {
         exit 1
     fi
 
+    if [ -z "$WFM_URL" ]; then
+        echo "ERROR: WFM URL should be supplied as the second positional argument"
+        echo "usage: bash wf-sync.sh <nsp_address> <wfm_address> <path_to_workflow_file> <workflow_id> [<http_proxy>]"
+        exit 1
+    fi
+
+
     if [ "$WF_FILE" != "list_workflows" ]; then
         if [ -z "$WF_FILE" ]; then
-            echo "ERROR: workflow file path should be supplied as the second positional argument"
+            echo "ERROR: workflow file path should be supplied as the third positional argument"
             echo "usage: bash wf-sync.sh <nsp_address> <path_to_workflow_file> <workflow_id> [<http_proxy>]"
             exit 1
         fi
@@ -37,9 +47,9 @@ function check_args() {
         fi
         # echo "WFID:${WF_ID}"
         if [ -z "$WF_ID" ]; then
-            echo "ERROR: workflow ID should be supplied as the third positional argument"
-            echo "usage: bash wf-sync.sh <nsp_ip> <path_to_workflow_file> <workflow_id> [<http_proxy>]"
-            echo "you can list the workflows and their IDs with 'bash wf-sync.sh <nsp_address> list_workflows [<http_proxy >]' command"
+            echo "ERROR: workflow ID should be supplied as the fourth positional argument"
+            echo "usage: bash wf-sync.sh <nsp_address> <wfm_address> <path_to_workflow_file> <workflow_id> [<http_proxy>]"
+            echo "you can list the workflows and their IDs with 'bash wf-sync.sh <nsp_address> <wfm_address> list_workflows [<http_proxy >]' command"
             exit 1
         fi
     fi
@@ -50,7 +60,7 @@ function get_workflows() {
 
     echo "Getting current workflows..."
     OUTPUT=$(
-        curl -skL ${HTTP_PROXY_CMD} "https://${NSP_URL}:8546/wfm/api/v1/workflow?sort_dirs=desc&sort_keys=created_at" \
+        curl -skL ${HTTP_PROXY_CMD} "https://${WFM_URL}:8546/wfm/api/v1/workflow?sort_dirs=desc&sort_keys=created_at" \
             --header 'Content-Type: application/json' \
             --header "Authorization: Bearer ${ACCESS_TOKEN}"
     )
@@ -78,7 +88,7 @@ function get_access_token() {
 
 if [ "$WF_FILE" == "list_workflows" ]; then
     # http proxy
-    HTTP_PROXY=$3
+    HTTP_PROXY=$4
 
     if [ -z "$HTTP_PROXY" ]; then
         HTTP_PROXY_CMD=""
@@ -101,7 +111,7 @@ check_args
 get_access_token
 
 echo "Setting workflow status to DRAFT..."
-OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${NSP_URL}:8546/wfm/api/v1/workflow/${WF_ID}/status" \
+OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${WFM_URL}:8546/wfm/api/v1/workflow/${WF_ID}/status" \
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${ACCESS_TOKEN}" \
     --data-binary '{"status":"DRAFT"}')
@@ -115,7 +125,7 @@ fi
 echo "Validating the workflow..."
 WF_BODY=$(cat ${WF_FILE})
 
-OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request POST "https://${NSP_URL}:8546/wfm/api/v1/workflow/validate" \
+OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request POST "https://${WFM_URL}:8546/wfm/api/v1/workflow/validate" \
     --header 'Content-Type: text/plain' \
     --header "Authorization: Bearer ${ACCESS_TOKEN}" \
     --data-binary "${WF_BODY}" \
@@ -136,14 +146,14 @@ if [ "$VALID_STATUS" == "false" ]; then
 fi
 
 echo "Updating the workflow definition..."
-OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${NSP_URL}:8546/wfm/api/v1/workflow/${WF_ID}/definition?provider=LOCAL%20NSP%20USER" \
+OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${WFM_URL}:8546/wfm/api/v1/workflow/${WF_ID}/definition?provider=LOCAL%20NSP%20USER" \
     --header 'Content-Type: text/plain' \
     --header "Authorization: Bearer ${ACCESS_TOKEN}" \
     --data-binary "${WF_BODY}" \
     --compressed)
 
 echo "Publishing workflow..."
-OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${NSP_URL}:8546/wfm/api/v1/workflow/${WF_ID}/status" \
+OUTPUT=$(curl -skL ${HTTP_PROXY_CMD} --request PUT "https://${WFM_URL}:8546/wfm/api/v1/workflow/${WF_ID}/status" \
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${ACCESS_TOKEN}" \
     --data-binary '{"status":"PUBLISHED"}')
@@ -153,3 +163,4 @@ if [ "$RESP_CODE" != "200" ]; then
     echo "Publishing failed, HTTP Code $RESP_CODE"
     exit 0
 fi
+
