@@ -101,6 +101,8 @@ function get_workflows() {
     fi
 
     echo $OUTPUT | jq -r '.response.data[] | {id: .id, name: .name, status: .details.status, last_updated: .details.last_modified_at}'
+
+    revoke_access_token
 }
 
 function get_access_token() {
@@ -113,6 +115,18 @@ function get_access_token() {
         --data-raw '{
 "grant_type":"client_credentials"
 }' | jq --raw-output '.access_token')
+}
+
+function revoke_access_token() {
+    # get access_token
+    echo "Revoking access token..."
+
+    ACCESS_TOKEN=$(
+        curl -skLN ${HTTP_PROXY_CMD} --request POST "https://${NSP_URL}/rest-gateway/rest/api/v1/auth/revocation" \
+            --header 'Authorization: Basic YWRtaW46Tm9raWFOc3AxIQ==' \
+            --data-urlencode "token=${ACCESS_TOKEN}" \
+            --data-urlencode 'token_type_hint=token'
+    )
 }
 
 check_args
@@ -177,4 +191,7 @@ if [ "$RESP_CODE" != "200" ]; then
     echo "Publishing failed, HTTP Code $RESP_CODE"
     exit 0
 fi
+
+revoke_access_token
+
 echo "Done!"
