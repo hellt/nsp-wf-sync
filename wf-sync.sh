@@ -11,6 +11,9 @@ while [ $# -gt 0 ]; do
     --nsp_url=*)
         NSP_URL="${1#*=}"
         ;;
+    --admin_password=*)
+        PASSWORD="${1#*=}"
+        ;;
     --wfm_url=*)
         WFM_URL="${1#*=}"
         ;;
@@ -108,13 +111,22 @@ function get_workflows() {
 function get_access_token() {
     # get access_token
     echo "Getting access token..."
+    
+    if [ -z "$PASSWORD" ]; then
+        # Default password
+        PASSWORD="NokiaNsp1!"
+    fi
+
+    AUTH=$(echo -n admin:${PASSWORD} | base64)
 
     ACCESS_TOKEN=$(curl -skLN ${HTTP_PROXY_CMD} --request POST "https://${NSP_URL}/rest-gateway/rest/api/v1/auth/token" \
-        --header 'Content-Type: application/json' \
-        --header 'Authorization: Basic YWRtaW46Tm9raWFOc3AxIQ==' \
+        --header "Content-Type: application/json" \
+        --header "Authorization: Basic ${AUTH}" \
         --data-raw '{
 "grant_type":"client_credentials"
 }' | jq --raw-output '.access_token')
+
+    echo AUTH=$AUTH Token=$ACCESS_TOKEN
 }
 
 function revoke_access_token() {
